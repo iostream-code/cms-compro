@@ -1,136 +1,237 @@
-# Setup Tenant Middleware & Migration Service
+# CMS Company Profile — Travel Haji & Umroh
 
-## 1. Registrasi Provider
+CMS multi-client (schema-per-client) untuk company profile Travel Haji &
+Umroh. Satu aplikasi Laravel melayani banyak client, masing-masing dengan
+data terisolasi penuh di schema PostgreSQL sendiri, diakses lewat subdomain
+atau custom domain masing-masing.
 
-`bootstrap/providers.php`:
-```php
-return [
-    App\Providers\AppServiceProvider::class,
-    App\Providers\TenantServiceProvider::class,
-];
-```
+---
 
-## 2. Registrasi Middleware (Laravel 11+, `bootstrap/app.php`)
+## Tech Stack
 
-Urutan **wajib**: `ResolveTenant` sebelum middleware `auth`, karena tabel
-`users` ada di schema tenant.
+| Layer | Teknologi |
+|---|---|
+| Backend | Laravel 13, PHP 8.5+ |
+| Frontend | Blade + Livewire 3 + Alpine.js (bawaan Livewire) |
+| Database | PostgreSQL (multi-schema) |
+| Auth | Session-based, 2 guard terpisah (`web` untuk client, `super_admin` untuk internal) |
+| Activity Log | Spatie Laravel Activity Log v5 |
+| Drag & drop | SortableJS |
 
-```php
-->withMiddleware(function (Middleware $middleware) {
-    $middleware->web(prepend: [
-        \App\Http\Middleware\ResolveTenant::class,
-    ]);
+**Kenapa Blade+Livewire, bukan React SPA?** Karena halaman visitor-facing
+butuh SEO kuat (server-side rendering native), dan CMS dashboard-nya lebih
+cepat dibangun lewat Livewire (server-driven, tidak perlu API layer
+terpisah) dibanding Alpine.js + fetch API manual.
 
-    $middleware->alias([
-        'role' => \App\Http\Middleware\EnsureRole::class,
-    ]);
-})
-```
+---
 
-Tidak ada Sanctum di stack ini -- auth CMS pakai session guard `web` biasa
-(lihat `config/auth.php`), karena FE-nya full Blade + Livewire/Alpine, bukan
-SPA terpisah yang butuh token API.
+## Arsitektur Singkat
 
-## 3. Contoh route (`routes/web.php`)
+- **1 database PostgreSQL**, N schema — 1 schema per client (`client_{subdomain}`)
+- Domain request (`namaclient.yourcompany.com` atau custom domain) di-resolve
+  ke schema yang tepat lewat `ResolveTenant` middleware, yang men-set
+  `search_path` PostgreSQL sebelum query apapun jalan
+- Schema `public` menyimpan data central: daftar client, super admin, activity
+  log gabungan, statistik rollup
+- Detail lengkap arsitektur ada di [`README_TENANT_SETUP.md`](./README_TENANT_SETUP.md)
 
-Lihat file `routes/web.php` -- CMS pakai `middleware(['auth'])` + `role:admin,member`
-per grup, visitor page publik tanpa auth sama sekali.
+---
 
-Super admin panel (`routes/superadmin.php`) pakai guard **terpisah**
-(`auth:super_admin`), baca dari `public.super_admins`, sama sekali tidak
-tersentuh `ResolveTenant`.
+## Prasyarat
 
-## 4. Alur pembuatan client baru
+- PHP 8.5+
+- Composer
+- Node.js + npm
+- PostgreSQL 14+
+- `psql` CLI (untuk setup manual saat development)
 
-```bash
-php artisan tenant:create "Azzahra Wisata" azzahra --custom-domain=azzahrawisata.com
-```
+---
 
-Command ini akan:
-1. Insert row ke `public.clients`
-2. `CREATE SCHEMA IF NOT EXISTS client_azzahra`
-3. Set `search_path` ke `client_azzahra, public`
-4. Jalankan semua migration di `database/migrations/tenant/`
-5. Jalankan `SectionTypeSeeder` untuk isi 12 tipe section
-6. Reset `search_path` kembali ke default
+## Setup dari Nol
 
-## 5. Rollout migration baru ke client existing
-
-Kalau nanti nambah kolom/tabel baru:
+### 1. Install dependency
 
 ```bash
-# taruh file migration baru di database/migrations/tenant/
-php artisan tenant:migrate azzahra   # 1 client
-php artisan tenant:migrate --all     # semua client aktif
+composer install
+npm install
+npm install sortablejs
 ```
 
-## 6. Dashboard monitoring super admin
-
-Dua sumber data, dua mekanisme berbeda:
-
-| Data | Sumber | Mekanisme |
-|---|---|---|
-| Feed aktivitas (siapa ngapain, kapan) | `public.activity_log` | Real-time, ditulis langsung lewat trait `LogsTenantActivity` / event login |
-| Statistik (total user, konten, kapan terakhir aktif) | `public.client_stats` | Rollup periodik lewat `tenant:refresh-stats` |
-
-Kenapa dipisah: statistik butuh `COUNT()` ke tabel-tabel di schema tenant,
-yang cuma bisa diakses satu per satu (search_path tidak bisa nunjuk ke
-banyak schema sekaligus). Menghitungnya on-demand tiap kali dashboard
-dibuka akan berarti loop N schema per request -- terlalu mahal. Activity
-log sebaliknya sudah central sejak awal, jadi bisa langsung real-time.
-
-### Jadwalkan refresh stats (`routes/console.php` atau `app/Console/Kernel.php`)
-
-```php
-use Illuminate\Support\Facades\Schedule;
-
-Schedule::command('tenant:refresh-stats --all')->everyFifteenMinutes();
+Tambahkan di paling atas `resources/js/app.js` (belum ter-otomasi, harus manual):
+```js
+import Sortable from 'sortablejs';
+window.Sortable = Sortable;
 ```
 
-### Daftarkan listener login (`app/Providers/EventServiceProvider.php`)
+### 2. Konfigurasi environment
 
-```php
-protected $listen = [
-    \Illuminate\Auth\Events\Login::class => [
-        \App\Listeners\LogUserLogin::class,
-    ],
-];
+```bash
+cp .env.example .env
+php artisan key:generate
 ```
 
-### Pasang trait di model yang aktivitasnya perlu dimonitor
+Set nilai berikut di `.env`:
+```env
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=db_tenant
+DB_USERNAME=postgres
+DB_PASSWORD=your_password
 
-Ganti `use Spatie\Activitylog\Traits\LogsActivity;` jadi:
-```php
-use App\Traits\LogsTenantActivity;
-
-class Page extends Model
-{
-    use LogsTenantActivity; // bukan LogsActivity langsung
-}
-```
-Lakukan yang sama di `Package` dan `Article`.
-
-### Status "stale" itu sengaja, bukan bug
-
-`ClientStat::isStale()` menandai kalau `stats_refreshed_at` sudah lebih dari
-30 menit. Ini penting supaya dashboard jujur ke super admin: kalau job
-scheduler gagal/telat untuk 1 client (misal schema-nya rusak), angka yang
-ditampilkan bukan angka yang diam-diam basi, tapi eksplisit ditandai
-`stats_stale` di endpoint `/superadmin/clients`.
-
-## 7. Catatan tentang queue worker
-
-Kalau ada job yang jalan di background (queue worker long-running proses),
-`search_path` yang di-set di 1 job **akan terbawa** ke job berikutnya dalam
-proses worker yang sama karena koneksi DB reused. Job yang butuh akses tenant
-harus:
-
-```php
-app(TenantDatabaseManager::class)->useSchema($client->schema_name);
-// ... logic job ...
-app(TenantDatabaseManager::class)->resetToDefault();
+CACHE_STORE=file
+TENANCY_BASE_DOMAIN=yourcompany.com
 ```
 
-Atau lebih aman: pasang listener di `JobProcessed` / `JobFailed` event untuk
-auto-reset search_path supaya tidak ada job yang "salah tenant" akibat state
-yang bocor dari job sebelumnya.
+> **Penting:** `CACHE_STORE` harus `file` (bukan default `database`), kecuali
+> Anda sudah menjalankan migration tambahan untuk tabel `cache`/`cache_locks`.
+
+### 3. Build asset frontend
+
+```bash
+npm run build
+```
+Atau untuk development dengan hot-reload:
+```bash
+npm run dev
+```
+
+### 4. Migrate database
+
+```bash
+php artisan migrate
+```
+Ini hanya menjalankan migration **central** (schema `public`): `clients`,
+`super_admins`, `activity_log`, `client_stats`. Migration **tenant** (users,
+pages, sections, dll — di `database/migrations/tenant/`) TIDAK ikut jalan di
+sini secara sengaja — itu baru dijalankan otomatis saat provisioning client
+baru di langkah berikutnya.
+
+### 5. Buat client pertama
+
+```bash
+php artisan tenant:create "Nama Perusahaan" subdomain-nya
+```
+
+Command ini otomatis: bikin schema PostgreSQL baru, jalankan 11 migration
+tenant di dalamnya, dan seed 12 tipe section (`SectionTypeSeeder`).
+
+Opsional, custom domain:
+```bash
+php artisan tenant:create "Nama Perusahaan" subdomain-nya --custom-domain=domainclient.com
+```
+
+### 6. Setup akses domain lokal
+
+Tambahkan ke `/etc/hosts` (perlu `sudo`):
+```
+127.0.0.1   subdomain-nya.yourcompany.com
+```
+`yourcompany.com` di sini harus sama persis dengan `TENANCY_BASE_DOMAIN` di `.env`.
+
+### 7. Jalankan server
+
+```bash
+php artisan serve
+```
+
+### 8. Buat user admin pertama untuk client tadi
+
+```bash
+php artisan tinker --execute="
+app(\App\Services\TenantDatabaseManager::class)->useSchema('client_subdomain-nya');
+\App\Models\User::create([
+    'name' => 'Admin',
+    'email' => 'admin@test.com',
+    'password' => bcrypt('password'),
+    'role' => 'admin',
+]);
+"
+```
+
+### 9. Akses
+
+- CMS login: `http://subdomain-nya.yourcompany.com:8000/login`
+- Super admin login: `http://subdomain-nya.yourcompany.com:8000/superadmin/login`
+  (perlu bikin row di tabel `public.super_admins` dulu — belum ada seeder-nya)
+
+---
+
+## Perintah Penting Sehari-hari
+
+```bash
+# Bikin client baru
+php artisan tenant:create "Nama" subdomain
+
+# Migrate migration baru ke 1 client existing
+php artisan tenant:migrate subdomain
+
+# Migrate migration baru ke SEMUA client aktif sekaligus
+php artisan tenant:migrate --all
+
+# Refresh statistik dashboard super admin (biasanya dijadwalkan tiap 15 menit)
+php artisan tenant:refresh-stats --all
+
+# Bersihkan semua cache (route, config, view, dll) -- pakai ini kalau ada
+# perubahan yang "tidak nyambung" padahal kodenya sudah benar
+php artisan optimize:clear
+```
+
+---
+
+## Struktur Folder yang Perlu Diketahui
+
+```
+app/
+├── Console/Commands/       # tenant:create, tenant:migrate, tenant:refresh-stats
+├── Http/
+│   ├── Controllers/
+│   │   ├── Auth/           # Login CMS & super admin
+│   │   ├── Cms/            # Controller CRUD konten (sebagian masih stub)
+│   │   ├── Public/         # Controller visitor-facing
+│   │   └── SuperAdmin/     # API monitoring dashboard
+│   └── Middleware/
+│       ├── ResolveTenant.php   # Inti sistem multi-tenant
+│       └── EnsureRole.php
+├── Livewire/Cms/           # Komponen Livewire (PageManager, SectionManager)
+├── Models/                 # Client & ClientStat = schema public, sisanya = schema tenant
+├── Services/                # TenantResolver, TenantDatabaseManager, TenantMigrationService, dst
+└── Traits/LogsTenantActivity.php
+
+database/migrations/
+├── central/                # Schema public -- di-load via TenantServiceProvider
+└── tenant/                 # Schema per-client -- HANYA dijalankan via TenantMigrationService,
+                             # JANGAN PERNAH lewat `php artisan migrate` biasa
+
+resources/views/
+├── components/
+│   ├── layouts/app.blade.php    # Layout default untuk Livewire full-page component
+│   ├── section/                  # 12 komponen render section (masih shell/placeholder styling)
+│   └── include/section-renderer.blade.php
+├── livewire/cms/
+└── public/                 # View visitor-facing
+```
+
+---
+
+## Dokumentasi Lain di Repo Ini
+
+| File | Isinya |
+|---|---|
+| [`HANDOFF.md`](./HANDOFF.md) | **Baca ini dulu** — known issues/gotchas dari proses development, status terkini per fase |
+| [`README_TENANT_SETUP.md`](./README_TENANT_SETUP.md) | Detail teknis arsitektur multi-tenant, registrasi middleware & provider |
+| [`SPRINT_PLAN.md`](./SPRINT_PLAN.md) | Breakdown kerja harian untuk sprint saat ini |
+| [`ROADMAP.md`](./ROADMAP.md) | Roadmap penuh (skenario timeline longgar) |
+
+---
+
+## Known Issues Singkat
+
+Package `spatie/laravel-activitylog` yang ter-install (v5, rilis Maret 2026)
+punya beberapa breaking changes dari versi yang lazim didokumentasikan di
+internet (namespace `LogsActivity`/`LogOptions` pindah lokasi, method
+`tapActivity()` jadi `beforeActivityLogged()`, dst). Kalau develop fitur baru
+yang menyentuh activity log, cek langsung ke
+`vendor/spatie/laravel-activitylog/src/` untuk API yang benar — jangan
+percaya cuma dari dokumentasi/tutorial lama. Detail lengkap semua known
+issues ada di [`HANDOFF.md`](./HANDOFF.md).
