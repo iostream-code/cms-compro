@@ -1,58 +1,136 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Setup Tenant Middleware & Migration Service
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+## 1. Registrasi Provider
 
-## About Laravel
-
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
-
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
-
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+`bootstrap/providers.php`:
+```php
+return [
+    App\Providers\AppServiceProvider::class,
+    App\Providers\TenantServiceProvider::class,
+];
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+## 2. Registrasi Middleware (Laravel 11+, `bootstrap/app.php`)
 
-## Contributing
+Urutan **wajib**: `ResolveTenant` sebelum middleware `auth`, karena tabel
+`users` ada di schema tenant.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```php
+->withMiddleware(function (Middleware $middleware) {
+    $middleware->web(prepend: [
+        \App\Http\Middleware\ResolveTenant::class,
+    ]);
 
-## Code of Conduct
+    $middleware->alias([
+        'role' => \App\Http\Middleware\EnsureRole::class,
+    ]);
+})
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Tidak ada Sanctum di stack ini -- auth CMS pakai session guard `web` biasa
+(lihat `config/auth.php`), karena FE-nya full Blade + Livewire/Alpine, bukan
+SPA terpisah yang butuh token API.
 
-## Security Vulnerabilities
+## 3. Contoh route (`routes/web.php`)
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Lihat file `routes/web.php` -- CMS pakai `middleware(['auth'])` + `role:admin,member`
+per grup, visitor page publik tanpa auth sama sekali.
 
-## License
+Super admin panel (`routes/superadmin.php`) pakai guard **terpisah**
+(`auth:super_admin`), baca dari `public.super_admins`, sama sekali tidak
+tersentuh `ResolveTenant`.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## 4. Alur pembuatan client baru
+
+```bash
+php artisan tenant:create "Azzahra Wisata" azzahra --custom-domain=azzahrawisata.com
+```
+
+Command ini akan:
+1. Insert row ke `public.clients`
+2. `CREATE SCHEMA IF NOT EXISTS client_azzahra`
+3. Set `search_path` ke `client_azzahra, public`
+4. Jalankan semua migration di `database/migrations/tenant/`
+5. Jalankan `SectionTypeSeeder` untuk isi 12 tipe section
+6. Reset `search_path` kembali ke default
+
+## 5. Rollout migration baru ke client existing
+
+Kalau nanti nambah kolom/tabel baru:
+
+```bash
+# taruh file migration baru di database/migrations/tenant/
+php artisan tenant:migrate azzahra   # 1 client
+php artisan tenant:migrate --all     # semua client aktif
+```
+
+## 6. Dashboard monitoring super admin
+
+Dua sumber data, dua mekanisme berbeda:
+
+| Data | Sumber | Mekanisme |
+|---|---|---|
+| Feed aktivitas (siapa ngapain, kapan) | `public.activity_log` | Real-time, ditulis langsung lewat trait `LogsTenantActivity` / event login |
+| Statistik (total user, konten, kapan terakhir aktif) | `public.client_stats` | Rollup periodik lewat `tenant:refresh-stats` |
+
+Kenapa dipisah: statistik butuh `COUNT()` ke tabel-tabel di schema tenant,
+yang cuma bisa diakses satu per satu (search_path tidak bisa nunjuk ke
+banyak schema sekaligus). Menghitungnya on-demand tiap kali dashboard
+dibuka akan berarti loop N schema per request -- terlalu mahal. Activity
+log sebaliknya sudah central sejak awal, jadi bisa langsung real-time.
+
+### Jadwalkan refresh stats (`routes/console.php` atau `app/Console/Kernel.php`)
+
+```php
+use Illuminate\Support\Facades\Schedule;
+
+Schedule::command('tenant:refresh-stats --all')->everyFifteenMinutes();
+```
+
+### Daftarkan listener login (`app/Providers/EventServiceProvider.php`)
+
+```php
+protected $listen = [
+    \Illuminate\Auth\Events\Login::class => [
+        \App\Listeners\LogUserLogin::class,
+    ],
+];
+```
+
+### Pasang trait di model yang aktivitasnya perlu dimonitor
+
+Ganti `use Spatie\Activitylog\Traits\LogsActivity;` jadi:
+```php
+use App\Traits\LogsTenantActivity;
+
+class Page extends Model
+{
+    use LogsTenantActivity; // bukan LogsActivity langsung
+}
+```
+Lakukan yang sama di `Package` dan `Article`.
+
+### Status "stale" itu sengaja, bukan bug
+
+`ClientStat::isStale()` menandai kalau `stats_refreshed_at` sudah lebih dari
+30 menit. Ini penting supaya dashboard jujur ke super admin: kalau job
+scheduler gagal/telat untuk 1 client (misal schema-nya rusak), angka yang
+ditampilkan bukan angka yang diam-diam basi, tapi eksplisit ditandai
+`stats_stale` di endpoint `/superadmin/clients`.
+
+## 7. Catatan tentang queue worker
+
+Kalau ada job yang jalan di background (queue worker long-running proses),
+`search_path` yang di-set di 1 job **akan terbawa** ke job berikutnya dalam
+proses worker yang sama karena koneksi DB reused. Job yang butuh akses tenant
+harus:
+
+```php
+app(TenantDatabaseManager::class)->useSchema($client->schema_name);
+// ... logic job ...
+app(TenantDatabaseManager::class)->resetToDefault();
+```
+
+Atau lebih aman: pasang listener di `JobProcessed` / `JobFailed` event untuk
+auto-reset search_path supaya tidak ada job yang "salah tenant" akibat state
+yang bocor dari job sebelumnya.
