@@ -19,9 +19,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // DEBUG SEMENTARA -- hapus setelah bug ketemu
-        \Illuminate\Support\Facades\DB::listen(function ($query) {
-            \Illuminate\Support\Facades\Log::info('SQL: ' . $query->sql, $query->bindings);
-        });
+        //
     }
 }

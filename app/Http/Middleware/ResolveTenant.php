@@ -42,12 +42,6 @@ class ResolveTenant
         $this->context->set($client);
         $this->db->useSchema($client->schema_name);
 
-        // DEBUG SEMENTARA -- hapus setelah bug ketemu
-        \Illuminate\Support\Facades\Log::info('ResolveTenant: search_path di-set', [
-            'target_schema' => $client->schema_name,
-            'actual_search_path' => \Illuminate\Support\Facades\DB::selectOne('SHOW search_path')->search_path ?? 'GAGAL BACA',
-        ]);
-
         return $next($request);
     }
 }
