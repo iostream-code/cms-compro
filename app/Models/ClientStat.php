@@ -7,7 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ClientStat extends Model
 {
-    protected $table = 'public.client_stats';
+    protected $connection = 'central'; // lihat catatan di App\Models\Client
+    protected $table = 'client_stats';
     protected $primaryKey = 'client_id';
     public $incrementing = false;
     protected $keyType = 'string';

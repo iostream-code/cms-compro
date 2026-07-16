@@ -39,9 +39,9 @@ class TenantStatsService
             $this->db->resetToDefault();
         }
 
-        // last_activity_at diambil dari activity_log (schema public),
-        // jadi query-nya di luar blok search_path tenant di atas.
-        $lastActivityAt = DB::table('activity_log')
+        // last_activity_at diambil dari activity_log (connection central),
+        // jadi query-nya di luar blok search_path/USE tenant di atas.
+        $lastActivityAt = DB::connection('central')->table('activity_log')
             ->where('client_id', $client->id)
             ->max('created_at');
 

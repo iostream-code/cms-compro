@@ -29,6 +29,7 @@ trait LogsTenantActivity
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
+            ->logFillable()
             ->logOnlyDirty()
             ->dontLogEmptyChanges();
     }

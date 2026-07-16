@@ -28,7 +28,7 @@ class DashboardController extends Controller
             COALESCE(SUM(total_articles), 0) as total_articles
         ')->first();
 
-        $activityToday = DB::table('activity_log')
+        $activityToday = DB::connection('central')->table('activity_log')
             ->whereDate('created_at', today())
             ->count();
 

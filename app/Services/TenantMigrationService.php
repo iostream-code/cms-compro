@@ -25,11 +25,39 @@ class TenantMigrationService
     {
         TenantDatabaseManager::assertValidSchemaName($client->schema_name);
 
-        DB::transaction(function () use ($client) {
+        $run = function () use ($client) {
             $this->db->createSchemaIfMissing($client->schema_name);
             $this->migrate($client);
             $this->seed($client);
-        });
+        };
+
+        try {
+            if ($this->db->hasTransactionalDdl()) {
+                // PostgreSQL: DDL transactional, jadi CREATE SCHEMA + migrate
+                // + seed benar-benar atomic dalam 1 transaction.
+                DB::transaction($run);
+            } else {
+                // MySQL: DDL (CREATE DATABASE/CREATE TABLE) auto-commit --
+                // membungkusnya dalam DB::transaction() tidak memberi atomicity
+                // apa pun, malah bikin PDO error "There is no active
+                // transaction" begitu statement DDL pertama jalan (transaction
+                // implicitly ke-commit tapi Laravel tidak tahu). Jalankan
+                // langsung, andalkan dropSchema() di bawah sebagai
+                // compensating action kalau gagal di tengah jalan.
+                $run();
+            }
+        } catch (Throwable $e) {
+            // Row client (connection 'central') tetap di-rollback oleh
+            // transaction pembungkus di TenantCreateCommand terlepas dari
+            // ini -- itu connection terpisah. Di sini kita cuma perlu
+            // bersihkan schema/database tenant supaya tidak ada yang
+            // "zombie" (setengah jadi) kalau drivernya non-transactional DDL.
+            if (!$this->db->hasTransactionalDdl()) {
+                $this->db->dropSchema($client->schema_name);
+            }
+
+            throw $e;
+        }
     }
 
     /**

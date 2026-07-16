@@ -1,11 +1,15 @@
 <?php
 
 use App\Http\Controllers\Auth\LoginController;
-use App\Http\Controllers\Cms\ArticleController;
-use App\Http\Controllers\Cms\PackageController;
-use App\Http\Controllers\Cms\SettingController;
+use App\Livewire\Cms\ArticleManager;
+use App\Livewire\Cms\Dashboard;
+use App\Livewire\Cms\PackageForm;
+use App\Livewire\Cms\PackageManager;
 use App\Livewire\Cms\PageManager;
+use App\Livewire\Cms\SectionContentForm;
 use App\Livewire\Cms\SectionManager;
+use App\Livewire\Cms\SettingForm;
+use App\Livewire\Cms\TestimonialManager;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -25,22 +29,26 @@ Route::middleware('auth')->group(function () {
     Route::post('logout', [LoginController::class, 'destroy'])->name('logout');
 
     Route::prefix('cms')->name('cms.')->group(function () {
-        // Placeholder -- ganti ke controller dashboard sungguhan begitu modul konten (Fase 4) jalan
-        Route::view('/', 'cms.dashboard')->name('dashboard');
+        Route::get('/', Dashboard::class)->name('dashboard');
 
         // Admin & member sama-sama boleh kelola konten
         Route::middleware('role:admin,member')->group(function () {
             Route::get('pages', PageManager::class)->name('pages.index');
             Route::get('pages/{page}/sections', SectionManager::class)->name('sections.index');
+            Route::get('sections/{section}/edit', SectionContentForm::class)->name('sections.edit');
 
-            Route::resource('packages', PackageController::class);
-            Route::resource('articles', ArticleController::class);
+            Route::get('packages', PackageManager::class)->name('packages.index');
+            Route::get('packages/create', PackageForm::class)->name('packages.create');
+            Route::get('packages/{package}/edit', PackageForm::class)->name('packages.edit');
+
+            Route::get('articles', ArticleManager::class)->name('articles.index');
+
+            Route::get('testimonials', TestimonialManager::class)->name('testimonials.index');
         });
 
-        // Hanya admin: kelola user, ganti template, ubah setting
+        // Hanya admin: ubah setting perusahaan
         Route::middleware('role:admin')->group(function () {
-            Route::get('settings', [SettingController::class, 'edit'])->name('settings.edit');
-            Route::put('settings', [SettingController::class, 'update'])->name('settings.update');
+            Route::get('settings', SettingForm::class)->name('settings.edit');
         });
     });
 });
@@ -48,4 +56,16 @@ Route::middleware('auth')->group(function () {
 // Visitor-facing (public, tanpa auth) -- tetap perlu resolusi tenant
 // untuk tahu data client mana yang ditampilkan
 Route::get('/', [\App\Http\Controllers\Public\HomeController::class, 'index'])->name('home');
+
+// WAJIB didaftarkan sebelum catch-all '/{slug}' di bawah, kalau tidak
+// '/paket', '/artikel', dst akan ketangkep sebagai slug halaman biasa.
+Route::get('paket', [\App\Http\Controllers\Public\PackagePublicController::class, 'index'])->name('packages.index');
+Route::get('paket/{package:slug}', [\App\Http\Controllers\Public\PackagePublicController::class, 'show'])->name('packages.show');
+
+Route::get('artikel', [\App\Http\Controllers\Public\ArticlePublicController::class, 'index'])->name('articles.index');
+Route::get('artikel/{article:slug}', [\App\Http\Controllers\Public\ArticlePublicController::class, 'show'])->name('articles.show');
+
+Route::get('galeri', [\App\Http\Controllers\Public\GalleryPublicController::class, 'index'])->name('gallery');
+Route::get('testimoni', [\App\Http\Controllers\Public\TestimonialPublicController::class, 'index'])->name('testimonials');
+
 Route::get('/{slug}', [\App\Http\Controllers\Public\PageController::class, 'show'])->name('page.show');

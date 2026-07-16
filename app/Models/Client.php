@@ -11,8 +11,12 @@ class Client extends Model
 {
     use HasUuids;
 
-    protected $connection = 'pgsql'; // selalu connection default (search_path publik/default)
-    protected $table = 'public.clients'; // qualifier eksplisit, aman meski search_path sedang di-override
+    // Connection 'central' -- alias dari connection default (pgsql/mysql)
+    // yang tidak pernah disentuh TenantDatabaseManager, jadi selalu bisa
+    // diakses terlepas dari tenant mana yang sedang aktif (lihat
+    // TenantServiceProvider::register()).
+    protected $connection = 'central';
+    protected $table = 'clients';
 
     protected $fillable = [
         'name',

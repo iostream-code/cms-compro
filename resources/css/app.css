@@ -1,9 +1,339 @@
 @import 'tailwindcss';
 
+/* Ikon: di-bundle lokal lewat npm (bukan CDN) supaya situs tetap jalan
+   di hosting tanpa akses internet keluar, dan tidak ada request pihak ketiga
+   yang memperlambat first paint. */
+@import 'boxicons/css/boxicons.min.css';
+
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+/* ===================================================================
+   Scroll reveal
+   Sengaja TIDAK pakai library (AOS dkk) -- efeknya cuma "fade + geser
+   saat masuk viewport", yang di sini jadi ~20 baris IntersectionObserver
+   (lihat resources/js/app.js). Menambah dependensi 14 KB untuk itu tidak
+   sepadan, dan library semacam AOS bermasalah dengan konten dinamis.
+
+   Elemen ditandai lewat atribut [data-reveal] di Blade.
+   =================================================================== */
+[data-reveal] {
+    opacity: 0;
+    transform: translateY(18px);
+    transition:
+        opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+        transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    transition-delay: var(--reveal-delay, 0ms);
+    will-change: opacity, transform;
+}
+
+[data-reveal].is-revealed {
+    opacity: 1;
+    transform: none;
+}
+
+/* Ken Burns: zoom pelan pada gambar hero supaya slide statis tidak terasa mati */
+@keyframes ken-burns {
+    from {
+        transform: scale(1);
+    }
+    to {
+        transform: scale(1.08);
+    }
+}
+
+.animate-ken-burns {
+    animation: ken-burns 9s ease-out forwards;
+}
+
+/* ===================================================================
+   Swiper
+   =================================================================== */
+.hero-swiper {
+    --swiper-theme-color: var(--brand);
+    --swiper-pagination-bullet-inactive-color: #ffffff;
+    --swiper-pagination-bullet-inactive-opacity: 0.45;
+    --swiper-pagination-bottom: 22px;
+}
+
+/* Tombol panah TIDAK memakai .swiper-button-next/prev bawaan.
+   Elemen bawaan itu menyuntik glyph lewat ::after yang ukuran & posisinya
+   terikat ke --swiper-navigation-size, sekaligus ikut menentukan kotak
+   tombolnya -- begitu tombol diberi ukuran sendiri, glyph-nya meleset dan
+   terpotong. Menimpanya berarti melawan CSS Swiper terus-terusan.
+   Jadi tombolnya dibuat sendiri di Blade (lihat section/hero-slider) dan
+   cuma didaftarkan ke Swiper lewat opsi navigation. */
+.hero-swiper .swiper-pagination-bullet {
+    width: 9px;
+    height: 9px;
+    transition:
+        width 0.3s ease,
+        opacity 0.3s ease;
+}
+
+.hero-swiper .swiper-pagination-bullet-active {
+    width: 28px;
+    border-radius: 9999px;
+}
+
+/* ===================================================================
+   Halaman login -- animasi masuk "gerbang"
+   Semuanya CSS murni: halaman login adalah pintu masuk sistem, jadi tidak
+   boleh bergantung pada JS. Urutannya disengaja: gerbang turun dulu, kartu
+   menyusul, baru isian form muncul satu per satu -- membangun kesan
+   "memasuki" ruang, bukan sekadar semuanya nongol bersamaan.
+   =================================================================== */
+@keyframes gate-drop {
+    from {
+        opacity: 0;
+        transform: translateY(-24px) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes rise-in {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* Gerbang dibangun dari atas ke bawah: atap turun, lengkung mekar, badan
+   naik, baru isian form muncul satu per satu. Urutan ini yang membangun
+   kesan "bangunan berdiri", bukan sekadar semuanya nongol bersamaan. */
+.gate-roof {
+    animation: gate-drop 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.gate-arch {
+    /* transform-origin di puncak: lengkungnya "mekar" turun dari atap,
+       bukan mengembang dari tengah badan. */
+    transform-origin: 50% 0;
+    animation: arch-unfurl 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.32s both;
+}
+
+.gate-body {
+    animation: rise-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.5s both;
+}
+
+.field-anim {
+    /* --d di-set inline per field supaya urutannya kelihatan di markup */
+    animation: rise-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) var(--d, 0ms) both;
+}
+
+/* Mustaka berkilau pelan. Sengaja lambat (5s) & halus: kalau cepat, mata
+   tertarik ke ornamen, padahal fokus halaman ini tetap form login. */
+/* transform-origin mengikuti pusat mustaka di viewBox atap (480 lebar,
+   pusat x=240). Kalau viewBox atapnya diubah lagi, angka ini ikut. */
+.mustaka-glow {
+    transform-origin: 240px 24px;
+    animation: mustaka-shine 5s ease-in-out infinite;
+}
+
+/* Awan sudut naik perlahan saat halaman dibuka -- terasa "mengapung masuk",
+   bukan sekadar nempel di tempat. Kanan sedikit lebih lambat supaya tidak
+   simetris kaku. */
+.mendung-corner {
+    animation: cloud-float-in 1.4s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both;
+}
+
+.mendung-corner:last-of-type {
+    animation-delay: 0.5s;
+}
+
+@keyframes cloud-float-in {
+    from {
+        opacity: 0;
+        transform: translateY(40px);
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes mustaka-shine {
+    0%,
+    100% {
+        opacity: 0.85;
+        filter: drop-shadow(0 0 2px rgba(240, 203, 99, 0.35));
+    }
+    50% {
+        opacity: 1;
+        filter: drop-shadow(0 0 10px rgba(240, 203, 99, 0.85));
+    }
+}
+
+@keyframes arch-unfurl {
+    from {
+        opacity: 0;
+        transform: scaleY(0.55);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* ===================================================================
+   Mega mendung
+   Tiap lapis digandakan lalu digeser -50% -> gulirannya menyambung mulus.
+   Durasi yang berbeda per lapis menghasilkan kesan kedalaman (parallax).
+   =================================================================== */
+@keyframes mendung-drift {
+    from {
+        transform: translate3d(0, 0, 0);
+    }
+    to {
+        transform: translate3d(-50%, 0, 0);
+    }
+}
+
+.mendung-slow {
+    animation: mendung-drift 120s linear infinite;
+}
+
+.mendung-mid {
+    animation: mendung-drift 85s linear infinite;
+}
+
+.mendung-fast {
+    /* reverse: lapis ini bergerak berlawanan arah, memperkuat kesan
+       lapisan awan yang saling melintas. */
+    animation: mendung-drift 60s linear infinite reverse;
+}
+
+/* ===================================================================
+   Scrollbar
+   Diselaraskan dengan warna brand tenant. Sengaja tidak menipiskan
+   scrollbar habis-habisan: batang yang terlalu tipis susah ditarik,
+   terutama di layar sentuh & bagi user dengan keterbatasan motorik.
+   =================================================================== */
+
+/* Firefox */
+html {
+    scrollbar-width: thin;
+    scrollbar-color: var(--brand, #c8952b) rgb(0 0 0 / 0.05);
+}
+
+/* Chrome/Edge/Safari */
+::-webkit-scrollbar {
+    width: 11px;
+    height: 11px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgb(0 0 0 / 0.04);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--brand, #c8952b);
+    border-radius: 9999px;
+    /* Border transparan + background-clip: bikin thumb terlihat "melayang"
+       dengan padding, tanpa perlu elemen tambahan. */
+    border: 3px solid transparent;
+    background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--brand-dark, #0e3b35);
+    background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* ===================================================================
+   Tombol kembali ke atas
+   =================================================================== */
+[data-scroll-top] {
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px) scale(0.9);
+    transition:
+        opacity 0.3s ease,
+        transform 0.3s ease,
+        visibility 0.3s;
+}
+
+[data-scroll-top].is-visible {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+}
+
+/* ===================================================================
+   Header
+   Topbar (tagline + kontak) dilipat saat scroll supaya viewport lebih
+   lega, tapi nav utama tetap sticky. Pakai grid-template-rows 1fr->0fr
+   karena itu satu-satunya cara meng-animasikan tinggi "auto" dengan
+   CSS murni tanpa hardcode nilai pixel.
+   =================================================================== */
+[data-topbar] {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-topbar] > * {
+    overflow: hidden;
+}
+
+[data-site-header].is-scrolled [data-topbar] {
+    grid-template-rows: 0fr;
+}
+
+[data-site-header].is-scrolled [data-nav] {
+    box-shadow: 0 4px 20px -8px rgb(0 0 0 / 0.18);
+}
+
+/* ===================================================================
+   Aksesibilitas
+   =================================================================== */
+
+/* Focus ring yang konsisten & kelihatan untuk navigasi keyboard --
+   penting karena banyak elemen di sini pakai warna brand yang variatif.
+
+   JANGAN tambahkan border-radius di sini: properti itu mengubah BENTUK
+   elemennya, bukan cuma outline-nya. Tombol bundar (mis. panah slider)
+   akan berubah jadi kotak begitu di-fokus. Outline modern sudah otomatis
+   mengikuti radius elemen aslinya. */
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+    outline: 2px solid var(--brand, #c8952b);
+    outline-offset: 2px;
+}
+
+/* Hormati preferensi sistem user: kalau dia minta animasi dikurangi
+   (motion sickness, vestibular disorder), matikan semua gerakan --
+   konten tetap tampil utuh, cuma tanpa transisi. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    [data-reveal] {
+        opacity: 1;
+        transform: none;
+    }
+
+    .animate-ken-burns {
+        animation: none;
+    }
 }

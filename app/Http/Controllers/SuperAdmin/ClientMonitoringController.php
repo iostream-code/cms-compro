@@ -4,6 +4,7 @@ namespace App\Http\Controllers\SuperAdmin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use App\Services\TenantDatabaseManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -21,9 +22,10 @@ class ClientMonitoringController extends Controller
             ->when($request->has('is_active'), fn ($q) => $q->where('is_active', $request->boolean('is_active')))
             ->when($request->filled('search'), function ($q) use ($request) {
                 $term = '%' . $request->string('search') . '%';
-                $q->where(fn ($qq) => $qq->where('name', 'ilike', $term)
-                    ->orWhere('subdomain', 'ilike', $term)
-                    ->orWhere('custom_domain', 'ilike', $term));
+                $operator = TenantDatabaseManager::caseInsensitiveLikeOperator();
+                $q->where(fn ($qq) => $qq->where('name', $operator, $term)
+                    ->orWhere('subdomain', $operator, $term)
+                    ->orWhere('custom_domain', $operator, $term));
             });
 
         $clients = $query->orderBy('name')->paginate($request->integer('per_page', 20));
@@ -48,7 +50,7 @@ class ClientMonitoringController extends Controller
      */
     public function activity(Client $client, Request $request): JsonResponse
     {
-        $activities = \DB::table('activity_log')
+        $activities = \DB::connection('central')->table('activity_log')
             ->where('client_id', $client->id)
             ->orderByDesc('created_at')
             ->paginate($request->integer('per_page', 30));

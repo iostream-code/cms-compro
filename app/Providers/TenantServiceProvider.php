@@ -12,6 +12,17 @@ class TenantServiceProvider extends ServiceProvider
         // Singleton per-request (bukan global) -- container Laravel di-reset
         // otomatis tiap request untuk aplikasi non-octane, jadi ini aman.
         $this->app->singleton(TenantContext::class);
+
+        // Connection 'central' -- salinan config dari connection default
+        // (pgsql atau mysql, sesuai DB_CONNECTION), tapi TIDAK PERNAH disentuh
+        // oleh TenantDatabaseManager::useSchema()/resetToDefault(). Model yang
+        // datanya harus selalu bisa diakses terlepas dari tenant mana yang
+        // sedang aktif (Client, SuperAdmin, ClientStat, ActivityLog) pakai
+        // connection ini. Karena cuma alias dari connection default, ganti
+        // driver di .env (pgsql <-> mysql) otomatis kebawa ke sini juga --
+        // tidak ada yang perlu diubah manual.
+        $default = config('database.default');
+        config(['database.connections.central' => config("database.connections.{$default}")]);
     }
 
     public function boot(): void

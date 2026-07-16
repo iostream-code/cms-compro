@@ -9,8 +9,8 @@ class SuperAdmin extends Authenticatable
 {
     use HasUuids;
 
-    protected $connection = 'pgsql';
-    protected $table = 'public.super_admins'; // qualifier eksplisit, aman terlepas dari search_path tenant aktif
+    protected $connection = 'central'; // lihat catatan di App\Models\Client
+    protected $table = 'super_admins';
 
     protected $fillable = [
         'name',

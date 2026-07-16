@@ -18,7 +18,7 @@ class ActivityFeedController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = DB::table('activity_log')
+        $query = DB::connection('central')->table('activity_log')
             ->join('clients', 'clients.id', '=', 'activity_log.client_id')
             ->select([
                 'activity_log.id',

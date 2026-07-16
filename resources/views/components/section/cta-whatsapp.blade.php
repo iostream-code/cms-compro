@@ -1,16 +1,30 @@
-{{--
-    Section: cta-whatsapp
-    $content -- array jsonb dari sections.content, sesuai blueprint di section_types.
-    Styling per template (corporate/creative/minimal) menyusul di Fase 5 (Hari 4-6).
-    Untuk sekarang: render minimal supaya sistem section->content->tampil sudah tersambung.
---}}
-<section class="section-cta-whatsapp py-12 px-6" data-section-type="cta-whatsapp">
-    <div class="max-w-5xl mx-auto">
-        <p class="text-xs font-mono uppercase tracking-wide text-[#8B9490] mb-2">cta-whatsapp</p>
-        @if (empty($content))
-            <p class="text-sm text-amber-600 italic">Section ini belum diisi kontennya.</p>
-        @else
-            <pre class="text-xs bg-[#F7F3EC] rounded-lg p-4 overflow-x-auto">{{ json_encode($content, JSON_PRETTY_PRINT) }}</pre>
-        @endif
-    </div>
-</section>
+@php
+    $settings = \App\Models\Setting::current();
+    $waNumber = preg_replace('/\D/', '', $settings->whatsapp_number ?? '');
+    $waMessage = $settings->whatsapp_default_message ?? '';
+@endphp
+
+@if ($waNumber)
+    <section class="section-cta-whatsapp relative overflow-hidden bg-[var(--brand-dark)] px-6 py-16" data-section-type="cta-whatsapp">
+
+        {{-- Deretan lengkung mihrab -- mengesankan serambi masjid --}}
+        <x-include.pattern variant="arch" class="text-[var(--brand)]" opacity="0.10" />
+
+        <div class="relative mx-auto max-w-3xl text-center" data-reveal>
+            @if (!empty($content['title']))
+                <h2 class="font-serif text-2xl font-bold text-white md:text-3xl">{{ $content['title'] }}</h2>
+            @endif
+
+            @if (!empty($content['description']))
+                <p class="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-white/75">{{ $content['description'] }}</p>
+            @endif
+
+            <a href="https://wa.me/{{ $waNumber }}?text={{ urlencode($waMessage) }}"
+               target="_blank" rel="noopener"
+               class="mt-8 inline-flex items-center gap-2.5 rounded-md bg-[var(--brand)] px-8 py-3.5 text-sm font-semibold text-white shadow-lg shadow-black/25 transition hover:brightness-110 hover:shadow-xl">
+                <i class="bx bxl-whatsapp text-xl" aria-hidden="true"></i>
+                {{ $content['button_text'] ?? 'Chat via WhatsApp' }}
+            </a>
+        </div>
+    </section>
+@endif

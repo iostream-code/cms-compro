@@ -3,6 +3,7 @@
 namespace App\Livewire\Cms;
 
 use App\Models\Page;
+use App\Services\TenantDatabaseManager;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Validate;
 use Livewire\Component;
@@ -79,7 +80,11 @@ class PageManager extends Component
     public function render()
     {
         $pages = Page::query()
-            ->when($this->search, fn ($q) => $q->where('title', 'ilike', "%{$this->search}%"))
+            ->when($this->search, fn ($q) => $q->where(
+                'title',
+                TenantDatabaseManager::caseInsensitiveLikeOperator(),
+                "%{$this->search}%"
+            ))
             ->orderBy('order')
             ->paginate(10);
 

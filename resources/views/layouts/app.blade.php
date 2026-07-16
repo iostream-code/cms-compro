@@ -17,6 +17,9 @@
                 <span class="font-serif text-[#0F3D3E] font-medium">CMS</span>
                 <a href="{{ route('cms.dashboard') }}" class="text-sm text-[#5B6663] hover:text-[#0F3D3E]">Dashboard</a>
                 <a href="{{ route('cms.pages.index') }}" class="text-sm text-[#5B6663] hover:text-[#0F3D3E]">Halaman</a>
+                <a href="{{ route('cms.packages.index') }}" class="text-sm text-[#5B6663] hover:text-[#0F3D3E]">Paket</a>
+                <a href="{{ route('cms.articles.index') }}" class="text-sm text-[#5B6663] hover:text-[#0F3D3E]">Artikel</a>
+                <a href="{{ route('cms.testimonials.index') }}" class="text-sm text-[#5B6663] hover:text-[#0F3D3E]">Testimoni</a>
                 @if (auth()->user()->role === 'admin')
                     <a href="{{ route('cms.settings.edit') }}"
                         class="text-sm text-[#5B6663] hover:text-[#0F3D3E]">Pengaturan</a>

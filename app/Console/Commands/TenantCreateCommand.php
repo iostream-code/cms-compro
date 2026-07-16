@@ -45,17 +45,22 @@ class TenantCreateCommand extends Command
             return self::FAILURE;
         }
 
-        // Bungkus insert row client + provisioning schema dalam SATU transaction.
-        // PostgreSQL mendukung DDL transactional (beda dengan MySQL), jadi
-        // CREATE SCHEMA + migrate + seed di dalam provision() (yang sudah
-        // punya transaction sendiri) otomatis jadi nested transaction/savepoint
-        // di sini -- selama connection-nya sama ('pgsql', default & dipakai
-        // eksplisit oleh model Client). Kalau provisioning gagal di tengah
-        // jalan, row client YANG BARU DIBUAT ikut di-rollback juga, jadi tidak
-        // ada client "zombie": row ada di public.clients tapi schema-nya
-        // setengah jadi / tidak ada sama sekali.
+        // Bungkus insert row client + provisioning schema dalam SATU transaction
+        // di connection 'central' (sama dengan connection model Client).
+        //
+        // Di PostgreSQL, DDL transactional -- CREATE SCHEMA + migrate + seed
+        // di dalam provision() (yang sudah punya transaction sendiri) otomatis
+        // jadi nested transaction/savepoint di sini, jadi kalau gagal di
+        // tengah jalan, row client YANG BARU DIBUAT ikut di-rollback juga:
+        // tidak ada client "zombie" (row ada di clients tapi schema-nya
+        // setengah jadi / tidak ada sama sekali).
+        //
+        // Di MySQL, DDL auto-commit dan TIDAK ikut rollback transaction ini --
+        // row client tetap ter-rollback seperti biasa, tapi database tenant-nya
+        // dibersihkan manual lewat compensating action di
+        // TenantMigrationService::provision() (lihat TenantDatabaseManager::dropSchema()).
         try {
-            $client = \Illuminate\Support\Facades\DB::connection('pgsql')->transaction(function () use ($migrationService, $subdomain, $schemaName) {
+            $client = \Illuminate\Support\Facades\DB::connection('central')->transaction(function () use ($migrationService, $subdomain, $schemaName) {
                 $client = Client::query()->create([
                     'name' => $this->argument('name'),
                     'subdomain' => $subdomain,

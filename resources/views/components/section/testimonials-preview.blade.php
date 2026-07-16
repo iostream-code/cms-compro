@@ -1,16 +1,35 @@
-{{--
-    Section: testimonials-preview
-    $content -- array jsonb dari sections.content, sesuai blueprint di section_types.
-    Styling per template (corporate/creative/minimal) menyusul di Fase 5 (Hari 4-6).
-    Untuk sekarang: render minimal supaya sistem section->content->tampil sudah tersambung.
---}}
-<section class="section-testimonials-preview py-12 px-6" data-section-type="testimonials-preview">
-    <div class="max-w-5xl mx-auto">
-        <p class="text-xs font-mono uppercase tracking-wide text-[#8B9490] mb-2">testimonials-preview</p>
-        @if (empty($content))
-            <p class="text-sm text-amber-600 italic">Section ini belum diisi kontennya.</p>
-        @else
-            <pre class="text-xs bg-[#F7F3EC] rounded-lg p-4 overflow-x-auto">{{ json_encode($content, JSON_PRETTY_PRINT) }}</pre>
-        @endif
-    </div>
-</section>
+@php
+    $testimonials = \App\Models\Testimonial::query()
+        ->where('is_published', true)
+        ->orderBy('order')
+        ->limit($content['limit'] ?? 3)
+        ->get();
+@endphp
+
+@if ($testimonials->isNotEmpty())
+    <section class="section-testimonials-preview px-6 py-16" data-section-type="testimonials-preview">
+        <div class="mx-auto max-w-6xl">
+            <div data-reveal>
+                <x-include.section-heading
+                    :eyebrow="$content['eyebrow'] ?? 'Testimoni'"
+                    :title="$content['title'] ?? null" />
+            </div>
+
+            <div class="grid gap-5 md:grid-cols-3">
+                @foreach ($testimonials as $index => $testimonial)
+                    <div class="h-full" data-reveal style="--reveal-delay: {{ $index * 100 }}ms">
+                        <x-include.testimonial-card :testimonial="$testimonial" />
+                    </div>
+                @endforeach
+            </div>
+
+            <div class="mt-10 text-center" data-reveal>
+                <a href="{{ route('testimonials') }}"
+                   class="group inline-flex items-center gap-2 rounded-md border-2 border-[var(--brand)] px-7 py-2.5 text-sm font-semibold text-[var(--brand)] transition hover:bg-[var(--brand)] hover:text-white">
+                    Semua Testimoni
+                    <i class="bx bx-right-arrow-alt text-lg transition-transform group-hover:translate-x-1" aria-hidden="true"></i>
+                </a>
+            </div>
+        </div>
+    </section>
+@endif

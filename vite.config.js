@@ -6,7 +6,9 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
     plugins: [
         laravel({
-            input: ['resources/css/app.css', 'resources/js/app.js'],
+            // app.js = CMS (Alpine datang dari Livewire), public.js = visitor
+            // (Alpine di-bundle sendiri). Lihat catatan di masing-masing file.
+            input: ['resources/css/app.css', 'resources/js/app.js', 'resources/js/public.js'],
             refresh: true,
             fonts: [
                 bunny('Instrument Sans', {

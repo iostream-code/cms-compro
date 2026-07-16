@@ -1,9 +1,9 @@
 # CMS Company Profile — Travel Haji & Umroh
 
-CMS multi-client (schema-per-client) untuk company profile Travel Haji &
-Umroh. Satu aplikasi Laravel melayani banyak client, masing-masing dengan
-data terisolasi penuh di schema PostgreSQL sendiri, diakses lewat subdomain
-atau custom domain masing-masing.
+CMS multi-client (1 schema/database terisolasi per client) untuk company
+profile Travel Haji & Umroh. Satu aplikasi Laravel melayani banyak client,
+masing-masing dengan data terisolasi penuh, diakses lewat subdomain atau
+custom domain masing-masing.
 
 ---
 
@@ -13,7 +13,7 @@ atau custom domain masing-masing.
 |---|---|
 | Backend | Laravel 13, PHP 8.5+ |
 | Frontend | Blade + Livewire 3 + Alpine.js (bawaan Livewire) |
-| Database | PostgreSQL (multi-schema) |
+| Database | PostgreSQL (schema-per-client) **atau** MySQL/MariaDB (database-per-client) -- pilih lewat `DB_CONNECTION` di `.env`, tidak ada kode yang perlu diubah |
 | Auth | Session-based, 2 guard terpisah (`web` untuk client, `super_admin` untuk internal) |
 | Activity Log | Spatie Laravel Activity Log v5 |
 | Drag & drop | SortableJS |
@@ -27,12 +27,19 @@ terpisah) dibanding Alpine.js + fetch API manual.
 
 ## Arsitektur Singkat
 
-- **1 database PostgreSQL**, N schema — 1 schema per client (`client_{subdomain}`)
+- **PostgreSQL**: 1 database, N schema — 1 schema per client (`client_{subdomain}`),
+  isolasi lewat `search_path`.
+- **MySQL/MariaDB**: N database — 1 database per client (`client_{subdomain}`),
+  isolasi lewat `USE`.
 - Domain request (`namaclient.yourcompany.com` atau custom domain) di-resolve
-  ke schema yang tepat lewat `ResolveTenant` middleware, yang men-set
-  `search_path` PostgreSQL sebelum query apapun jalan
-- Schema `public` menyimpan data central: daftar client, super admin, activity
-  log gabungan, statistik rollup
+  ke schema/database yang tepat lewat `ResolveTenant` middleware.
+- Data central (daftar client, super admin, activity log gabungan, statistik
+  rollup) selalu diakses lewat connection `central` -- connection terpisah
+  yang tidak pernah ikut berpindah tenant, jadi aman terlepas dari client
+  mana yang sedang aktif, di kedua driver.
+- Driver dipilih lewat `DB_CONNECTION` di `.env` (`pgsql` atau `mysql`/`mariadb`).
+  Semua logika switching sudah driver-aware (lihat `TenantDatabaseManager`),
+  jadi ganti driver cukup ganti `.env` + `php artisan migrate`.
 - Detail lengkap arsitektur ada di [`README_TENANT_SETUP.md`](./README_TENANT_SETUP.md)
 
 ---
@@ -42,8 +49,7 @@ terpisah) dibanding Alpine.js + fetch API manual.
 - PHP 8.5+
 - Composer
 - Node.js + npm
-- PostgreSQL 14+
-- `psql` CLI (untuk setup manual saat development)
+- PostgreSQL 14+ (`psql` CLI) **atau** MySQL 8+ / MariaDB 10.6+ (`mysql` CLI)
 
 ---
 
@@ -70,7 +76,7 @@ cp .env.example .env
 php artisan key:generate
 ```
 
-Set nilai berikut di `.env`:
+Set nilai berikut di `.env` (contoh PostgreSQL):
 ```env
 DB_CONNECTION=pgsql
 DB_HOST=127.0.0.1
@@ -82,6 +88,19 @@ DB_PASSWORD=your_password
 CACHE_STORE=file
 TENANCY_BASE_DOMAIN=yourcompany.com
 ```
+
+Atau kalau pakai MySQL/MariaDB, cukup ganti blok `DB_*`-nya:
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=db_tenant
+DB_USERNAME=root
+DB_PASSWORD=your_password
+```
+Tidak ada perubahan kode yang diperlukan untuk pindah driver -- lihat
+[`README_TENANT_SETUP.md`](./README_TENANT_SETUP.md) bagian "Dukungan
+Multi-Driver".
 
 > **Penting:** `CACHE_STORE` harus `file` (bukan default `database`), kecuali
 > Anda sudah menjalankan migration tambahan untuk tabel `cache`/`cache_locks`.
@@ -113,8 +132,9 @@ baru di langkah berikutnya.
 php artisan tenant:create "Nama Perusahaan" subdomain-nya
 ```
 
-Command ini otomatis: bikin schema PostgreSQL baru, jalankan 11 migration
-tenant di dalamnya, dan seed 12 tipe section (`SectionTypeSeeder`).
+Command ini otomatis: bikin schema (PostgreSQL) atau database (MySQL/MariaDB)
+baru sesuai `DB_CONNECTION` aktif, jalankan 11 migration tenant di dalamnya,
+dan seed 12 tipe section (`SectionTypeSeeder`).
 
 Opsional, custom domain:
 ```bash

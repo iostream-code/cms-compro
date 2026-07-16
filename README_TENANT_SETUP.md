@@ -134,3 +134,62 @@ app(TenantDatabaseManager::class)->resetToDefault();
 Atau lebih aman: pasang listener di `JobProcessed` / `JobFailed` event untuk
 auto-reset search_path supaya tidak ada job yang "salah tenant" akibat state
 yang bocor dari job sebelumnya.
+
+## 8. Dukungan Multi-Driver (PostgreSQL & MySQL/MariaDB)
+
+Multi-tenancy di aplikasi ini driver-aware: PostgreSQL pakai schema-per-client
+(`search_path`), MySQL/MariaDB pakai database-per-client (`USE`). Pindah
+driver cukup ganti `DB_CONNECTION` di `.env` -- tidak ada baris kode yang
+perlu disentuh manual.
+
+### Bagaimana ini bisa jalan tanpa cabang kode di banyak tempat
+
+- **Connection `central`** (didaftarkan otomatis di
+  `TenantServiceProvider::register()`) adalah salinan config dari connection
+  default (`pgsql` atau `mysql`, ikut `DB_CONNECTION`), tapi PDO-nya terpisah
+  dan **tidak pernah** disentuh oleh `TenantDatabaseManager`. Model yang
+  datanya harus selalu bisa diakses terlepas dari tenant mana yang aktif --
+  `Client`, `SuperAdmin`, `ClientStat`, dan `App\Models\ActivityLog` (override
+  `activity_model` Spatie, lihat `config/activitylog.php`) -- semuanya pakai
+  connection ini, jadi tidak perlu qualifier schema seperti `public.clients`
+  lagi.
+- **Connection default** (nama connection = `DB_CONNECTION`) dipakai untuk
+  akses data tenant (users, pages, sections, dll, semua tabel di
+  `database/migrations/tenant/`), dan schema/database aktifnya dialihkan oleh
+  `TenantDatabaseManager::useSchema()` / `resetToDefault()`:
+  - PostgreSQL: `SET search_path TO "client_x", public`
+  - MySQL/MariaDB: `USE \`client_x\``
+- Query lintas tenant/central yang tadinya butuh qualifier eksplisit (mis.
+  `DB::table('activity_log')` di dashboard super admin) HARUS lewat
+  `DB::connection('central')->table(...)` -- unqualified saja TIDAK CUKUP di
+  MySQL karena `USE` (beda dengan `search_path` Postgres) tidak ada fallback
+  ke database lain.
+
+### Perbedaan penting yang perlu diketahui
+
+- **DDL non-transactional di MySQL.** `CREATE DATABASE`/`CREATE TABLE`
+  auto-commit di MySQL, tidak seperti PostgreSQL yang DDL-nya transactional.
+  `TenantMigrationService::provision()` karena itu TIDAK membungkus
+  `createSchemaIfMissing()` + `migrate()` + `seed()` dalam
+  `DB::transaction()` untuk MySQL (beda dengan PostgreSQL) -- kalau gagal di
+  tengah jalan, `TenantDatabaseManager::dropSchema()` dipanggil sebagai
+  compensating action manual supaya tidak ada database tenant yang "zombie"
+  (setengah jadi).
+- **Operator case-insensitive.** `ilike` cuma ada di PostgreSQL. Pakai
+  `TenantDatabaseManager::caseInsensitiveLikeOperator()` (bukan hardcode
+  `ilike`/`like`) di query pencarian mana pun -- lihat pemakaiannya di
+  `ClientMonitoringController` dan `PageManager`.
+- **Tipe kolom `jsonb`.** Migration tenant (`sections`, `section_types`,
+  `packages`, `settings`) pakai `$table->jsonb(...)`. Laravel otomatis
+  fallback ke tipe `JSON` biasa di MySQL grammar, jadi migration yang sama
+  jalan di kedua driver tanpa perubahan.
+
+### Checklist kalau menambah query/model central baru
+
+1. Model central baru? Set `protected $connection = 'central';`, table name
+   TANPA qualifier (`clients`, bukan `public.clients`).
+2. Raw query ke tabel central dari dalam kode yang mungkin jalan saat tenant
+   aktif (controller super admin, service scheduler)? Pakai
+   `DB::connection('central')->table(...)`, jangan `DB::table(...)` polos.
+3. Perlu `LIKE` case-insensitive? Pakai
+   `TenantDatabaseManager::caseInsensitiveLikeOperator()`.

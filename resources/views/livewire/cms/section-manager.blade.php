@@ -54,8 +54,7 @@
                     {{ $section->is_visible ? 'Tampil' : 'Tersembunyi' }}
                 </button>
 
-                {{-- Form isi konten menyusul di Hari 3 -- untuk sekarang cukup placeholder link --}}
-                <a href="#" class="text-sm text-[#0F3D3E] hover:underline">Isi Konten</a>
+                <a href="{{ route('cms.sections.edit', $section) }}" class="text-sm text-[#0F3D3E] hover:underline">Isi Konten</a>
 
                 <button wire:click="removeSection({{ $section->id }})" wire:confirm="Hapus section ini?"
                         class="text-sm text-red-500 hover:underline">

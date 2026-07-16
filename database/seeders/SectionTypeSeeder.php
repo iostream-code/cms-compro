@@ -69,9 +69,12 @@ class SectionTypeSeeder extends Seeder
                 'description' => 'Profil singkat perusahaan travel, biasanya dengan foto pendukung.',
                 'schema' => [
                     'fields' => [
+                        ['key' => 'eyebrow', 'label' => 'Label Kecil di Atas Judul', 'type' => 'text', 'max' => 40, 'default' => 'Tentang Kami'],
                         ['key' => 'title', 'label' => 'Judul', 'type' => 'text', 'required' => true, 'max' => 100],
                         ['key' => 'content', 'label' => 'Isi', 'type' => 'richtext', 'required' => true],
                         ['key' => 'image_url', 'label' => 'Gambar Pendukung', 'type' => 'image'],
+                        ['key' => 'cta_text', 'label' => 'Teks Tombol', 'type' => 'text', 'max' => 30],
+                        ['key' => 'cta_link', 'label' => 'Link Tombol', 'type' => 'text'],
                     ],
                 ],
             ],
@@ -89,7 +92,7 @@ class SectionTypeSeeder extends Seeder
                             'min' => 1,
                             'max' => 8,
                             'fields' => [
-                                ['key' => 'icon', 'label' => 'Icon', 'type' => 'text'],
+                                ['key' => 'icon', 'label' => 'Ikon', 'type' => 'icon'],
                                 ['key' => 'title', 'label' => 'Judul', 'type' => 'text', 'required' => true, 'max' => 60],
                                 ['key' => 'description', 'label' => 'Deskripsi', 'type' => 'textarea', 'max' => 200],
                             ],
@@ -103,9 +106,10 @@ class SectionTypeSeeder extends Seeder
                 'description' => 'Auto-fetch dari tabel packages -- tampilkan beberapa paket terbaru/pilihan.',
                 'schema' => [
                     'fields' => [
+                        ['key' => 'eyebrow', 'label' => 'Label Kecil di Atas Judul', 'type' => 'text', 'max' => 40],
                         ['key' => 'title', 'label' => 'Judul Section', 'type' => 'text', 'max' => 100],
                         ['key' => 'package_type_filter', 'label' => 'Filter Tipe', 'type' => 'select', 'options' => ['all', 'umroh', 'haji', 'wisata_religi'], 'default' => 'all'],
-                        ['key' => 'limit', 'label' => 'Jumlah Ditampilkan', 'type' => 'number', 'min' => 1, 'max' => 12, 'default' => 3],
+                        ['key' => 'limit', 'label' => 'Jumlah Ditampilkan', 'type' => 'number', 'min' => 1, 'max' => 12, 'default' => 4],
                     ],
                 ],
             ],
@@ -115,7 +119,9 @@ class SectionTypeSeeder extends Seeder
                 'description' => 'Daftar fasilitas yang didapat jamaah (hotel, katering, dsb).',
                 'schema' => [
                     'fields' => [
+                        ['key' => 'eyebrow', 'label' => 'Label Kecil di Atas Judul', 'type' => 'text', 'max' => 40, 'default' => 'Fasilitas Jamaah'],
                         ['key' => 'title', 'label' => 'Judul Section', 'type' => 'text', 'max' => 100],
+                        ['key' => 'subtitle', 'label' => 'Deskripsi Section', 'type' => 'textarea', 'max' => 250],
                         [
                             'key' => 'items',
                             'label' => 'Fasilitas',
@@ -123,8 +129,9 @@ class SectionTypeSeeder extends Seeder
                             'min' => 1,
                             'max' => 12,
                             'fields' => [
-                                ['key' => 'icon', 'label' => 'Icon', 'type' => 'text'],
+                                ['key' => 'icon', 'label' => 'Ikon', 'type' => 'icon'],
                                 ['key' => 'label', 'label' => 'Nama Fasilitas', 'type' => 'text', 'required' => true, 'max' => 60],
+                                ['key' => 'description', 'label' => 'Deskripsi', 'type' => 'textarea', 'max' => 150],
                             ],
                         ],
                     ],
@@ -157,7 +164,8 @@ class SectionTypeSeeder extends Seeder
                 'description' => 'Kutipan Al-Quran/Hadits yang relevan, biasanya untuk penyegaran spiritual.',
                 'schema' => [
                     'fields' => [
-                        ['key' => 'quote_text', 'label' => 'Teks Kutipan', 'type' => 'textarea', 'required' => true, 'max' => 500],
+                        ['key' => 'arabic_text', 'label' => 'Teks Arab (opsional)', 'type' => 'textarea', 'max' => 500],
+                        ['key' => 'quote_text', 'label' => 'Terjemahan / Teks Kutipan', 'type' => 'textarea', 'required' => true, 'max' => 500],
                         ['key' => 'source', 'label' => 'Sumber (mis. QS. Al-Baqarah: 197)', 'type' => 'text', 'max' => 100],
                     ],
                 ],
@@ -168,6 +176,7 @@ class SectionTypeSeeder extends Seeder
                 'description' => 'Auto-fetch dari tabel testimonials -- social proof dari jamaah.',
                 'schema' => [
                     'fields' => [
+                        ['key' => 'eyebrow', 'label' => 'Label Kecil di Atas Judul', 'type' => 'text', 'max' => 40, 'default' => 'Testimoni'],
                         ['key' => 'title', 'label' => 'Judul Section', 'type' => 'text', 'max' => 100],
                         ['key' => 'limit', 'label' => 'Jumlah Ditampilkan', 'type' => 'number', 'min' => 1, 'max' => 12, 'default' => 3],
                     ],
@@ -179,7 +188,9 @@ class SectionTypeSeeder extends Seeder
                 'description' => 'Kumpulan foto dokumentasi kegiatan/perjalanan.',
                 'schema' => [
                     'fields' => [
+                        ['key' => 'eyebrow', 'label' => 'Label Kecil di Atas Judul', 'type' => 'text', 'max' => 40, 'default' => 'Galeri'],
                         ['key' => 'title', 'label' => 'Judul Section', 'type' => 'text', 'max' => 100],
+                        ['key' => 'subtitle', 'label' => 'Deskripsi Section', 'type' => 'textarea', 'max' => 250],
                         [
                             'key' => 'images',
                             'label' => 'Foto',
@@ -200,6 +211,7 @@ class SectionTypeSeeder extends Seeder
                 'description' => 'Auto-fetch dari tabel articles -- konten edukatif terbaru.',
                 'schema' => [
                     'fields' => [
+                        ['key' => 'eyebrow', 'label' => 'Label Kecil di Atas Judul', 'type' => 'text', 'max' => 40, 'default' => 'Berita Terbaru'],
                         ['key' => 'title', 'label' => 'Judul Section', 'type' => 'text', 'max' => 100],
                         ['key' => 'category_filter', 'label' => 'Filter Kategori', 'type' => 'text'],
                         ['key' => 'limit', 'label' => 'Jumlah Ditampilkan', 'type' => 'number', 'min' => 1, 'max' => 12, 'default' => 3],
